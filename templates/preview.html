@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>プレビュー画像調整</title>
+    <style>
+        #preview-container {
+            position: relative;
+            display: inline-block;
+            margin-left: 0;
+        }
+        #preview-image {
+            display: block;
+            width: 33%;
+            height: auto;
+        }
+        #overlay-canvas {
+            position: absolute;
+            left: 0;
+            top: 0;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .guide-label {
+            position: absolute;
+            color: red;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 11;
+        }
+        #aspect-x, #aspect-y {
+            position: absolute;
+            font-weight: bold;
+            background: rgba(255,255,255,0.7);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        #aspect-x {
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #aspect-y {
+            top: 50%;
+            right: -40px;
+            transform: translateY(-50%) rotate(-90deg);
+        }
+    </style>
+</head>
+<body>
+    <h1>プレビュー画像（顔位置調整）</h1>
+    <div id="preview-container">
+        <img id="preview-image" src="{{ url_for('send_file', filename=filename) }}">
+        <canvas id="overlay-canvas"></canvas>
+        <div id="head-label" class="guide-label">頭頂</div>
+        <div id="eye-label" class="guide-label">目線</div>
+        <div id="chin-label" class="guide-label">顎</div>
+        <div id="aspect-x">横比</div>
+        <div id="aspect-y">縦比</div>
+    </div>
+
+    <form action="/create-checkout-session" method="POST">
+        <input type="hidden" name="bgcolor" value="{{ bgcolor }}">
+        <input type="hidden" name="width" value="{{ width }}">
+        <input type="hidden" name="height" value="{{ height }}">
+        <input type="hidden" name="format" value="{{ format }}">
+        <input type="hidden" name="y_offset" id="y_offset" value="0">
+        <input type="hidden" name="scale_factor" id="scale_factor" value="1">
+        <input type="hidden" name="purpose" value="{{ purpose }}">
+        <input type="hidden" name="aspect_ratio" value="{{ aspect_ratio }}">
+        <input type="hidden" name="custom_rw" value="{{ custom_rw }}">
+        <input type="hidden" name="custom_rh" value="{{ custom_rh }}">
+
+        <button type="submit">300円で購入してダウンロード</button>
+    </form>
+
+    <script>
+        const img = document.getElementById("preview-image");
+        const canvas = document.getElementById("overlay-canvas");
+        const ctx = canvas.getContext("2d");
+        const yOffsetInput = document.getElementById("y_offset");
+        const scaleInput = document.getElementById("scale_factor");
+
+        const headLabel = document.getElementById("head-label");
+        const eyeLabel = document.getElementById("eye-label");
+        const chinLabel = document.getElementById("chin-label");
+        const aspectX = document.getElementById("aspect-x");
+        const aspectY = document.getElementById("aspect-y");
+
+        let dragging = false;
+        let lastY = 0;
+        let offsetY = 0;
+
+        const purpose = "{{ purpose }}";
+        const aspectRatio = "{{ aspect_ratio }}";
+        const customRW = parseFloat("{{ custom_rw }}");
+        const customRH = parseFloat("{{ custom_rh }}");
+        let rw = 3, rh = 4;
+
+        if (aspectRatio === "custom") {
+            rw = customRW;
+            rh = customRH;
+        } else {
+            [rw, rh] = aspectRatio.split(":".trim()).map(Number);
+        }
+
+        img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            drawGuides();
+        };
+
+        function drawGuides() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = "gray";
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.stroke();
+
+            ctx.strokeStyle = "red";
+            ctx.lineWidth = 1;
+
+            let eyeRatio = 0.55, chinRatio = 0.80, headRatio = 0.20;
+            if (purpose === "passport") {
+                eyeRatio = 0.50; chinRatio = 0.82; headRatio = 0.18;
+            } else if (purpose === "mynumber") {
+                eyeRatio = 0.52; chinRatio = 0.78; headRatio = 0.22;
+            }
+
+            const eyeLine = canvas.height * eyeRatio + offsetY;
+            const chinLine = canvas.height * chinRatio + offsetY;
+            const headLine = canvas.height * headRatio + offsetY;
+
+            [headLine, eyeLine, chinLine].forEach(y => {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            });
+
+            headLabel.style.top = `${headLine - 10}px`;
+            eyeLabel.style.top = `${eyeLine - 10}px`;
+            chinLabel.style.top = `${chinLine - 10}px`;
+            headLabel.style.left = eyeLabel.style.left = chinLabel.style.left = `5px`;
+
+            aspectX.textContent = `横比 ${rw}`;
+            aspectY.textContent = `縦比 ${rh}`;
+        }
+
+        canvas.addEventListener("mousedown", (e) => {
+            dragging = true;
+            lastY = e.clientY;
+        });
+
+        window.addEventListener("mouseup", () => {
+            dragging = false;
+        });
+
+        window.addEventListener("mousemove", (e) => {
+            if (!dragging) return;
+            const delta = e.clientY - lastY;
+            offsetY += delta;
+            yOffsetInput.value = offsetY;
+            lastY = e.clientY;
+            drawGuides();
+        });
+    </script>
+</body>
+</html>

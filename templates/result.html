@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>アップロード完了</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      margin: 40px;
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+      margin-top: 20px;
+    }
+    .button {
+      margin-top: 30px;
+    }
+  </style>
+</head>
+<body>
+  <h1>アップロードされた画像</h1>
+  <img src="{{ url_for('send_file', filename=filename) }}" alt="アップロード画像">
+  <div class="button">
+    <a href="/">
+      <button>戻る</button>
+    </a>
+  </div>
+</body>
+</html>

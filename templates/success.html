@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>本番画像完成</title>
+  <style>
+    #container {
+      text-align: center;
+      position: relative;
+    }
+    #final {
+      display: block;
+      margin: 0 auto;
+    }
+    #canvas-overlay {
+      position: absolute;
+      left: 0;
+      top: 0;
+      pointer-events: none;
+    }
+    #aspect-x, #aspect-y {
+      position: absolute;
+      font-weight: bold;
+      background: rgba(255,255,255,0.7);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    #aspect-x {
+      top: -30px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    #aspect-y {
+      top: 50%;
+      right: -40px;
+      transform: translateY(-50%) rotate(-90deg);
+    }
+  </style>
+</head>
+<body>
+  <h1>本番画像が完成しました！</h1>
+  <div id="container">
+    <img id="final" src="{{ url_for('send_file', filename=filename) }}" alt="最終画像">
+    <canvas id="canvas-overlay"></canvas>
+    <div id="aspect-x">横比 {{ custom_rw if aspect_ratio == 'custom' else aspect_ratio.split(':')[0] }}</div>
+    <div id="aspect-y">縦比 {{ custom_rh if aspect_ratio == 'custom' else aspect_ratio.split(':')[1] }}</div>
+  </div>
+  <br><br>
+  <a href="/download" download>
+    <button>画像をダウンロード</button>
+  </a>
+
+  <script>
+    const img = document.getElementById("final");
+    const canvas = document.getElementById("canvas-overlay");
+    const ctx = canvas.getContext("2d");
+
+    const purpose = "{{ purpose }}";
+
+    function drawOverlay() {
+      canvas.width = img.width;
+      canvas.height = img.height;
+
+      // 中央縦線
+      ctx.strokeStyle = "gray";
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2, 0);
+      ctx.lineTo(canvas.width / 2, canvas.height);
+      ctx.stroke();
+
+      // 赤補助線（頭頂・目線・顎）
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 1;
+      let eyeRatio = 0.55, chinRatio = 0.80, headRatio = 0.20;
+      if (purpose === "passport") {
+        eyeRatio = 0.50; chinRatio = 0.82; headRatio = 0.18;
+      } else if (purpose === "mynumber") {
+        eyeRatio = 0.52; chinRatio = 0.78; headRatio = 0.22;
+      }
+      [headRatio, eyeRatio, chinRatio].forEach(r => {
+        const y = canvas.height * r;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      });
+    }
+
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      drawOverlay();
+    };
+  </script>
+</body>
+</html>
