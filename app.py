@@ -16,7 +16,7 @@ UPLOAD_FOLDER = "static"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-YOUR_DOMAIN = "http://localhost:5000"
+YOUR_DOMAIN = "https://photo-bg-remover.onrender.com"
 
 def preview_image(input_path, output_path, bgcolor=(255, 255, 255), threshold=0.5):
     with open(input_path, 'rb') as i:
