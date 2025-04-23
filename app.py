@@ -11,8 +11,10 @@ import stripe
 
 load_dotenv()
 
-# static フォルダがなければ自動作成（Render対策）
-os.makedirs("static", exist_ok=True)
+# staticフォルダがなければ作る
+if not os.path.exists("static"):
+    os.makedirs("static")
+
 
 app = Flask(__name__)
 UPLOAD_FOLDER = "static"
