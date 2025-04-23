@@ -11,9 +11,11 @@ import stripe
 
 load_dotenv()
 
+# static フォルダがなければ自動作成（Render対策）
+os.makedirs("static", exist_ok=True)
+
 app = Flask(__name__)
-UPLOAD_FOLDER = "/tmp"
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+UPLOAD_FOLDER = "static"
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 YOUR_DOMAIN = "https://photo-bg-remover.onrender.com"
