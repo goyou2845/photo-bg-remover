@@ -16,9 +16,15 @@ if not os.path.exists("static"):
     os.makedirs("static")
 
 
-app = Flask(__name__)
+aapp = Flask(__name__)
+
+# アップロードフォルダの設定
 UPLOAD_FOLDER = "static"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+
+# static フォルダが存在しなければ作成
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
