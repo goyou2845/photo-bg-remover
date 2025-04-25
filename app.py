@@ -18,6 +18,8 @@ if not os.path.exists("static"):
 
 app = Flask(__name__)
 UPLOAD_FOLDER = "static"
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 YOUR_DOMAIN = "https://photo-bg-remover.onrender.com"
