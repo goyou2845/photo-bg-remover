@@ -1,193 +1,161 @@
+from flask import Flask, render_template, request, redirect, url_for, send_file
 import os
-from flask import Flask, render_template, request, send_from_directory, redirect, url_for
 import cv2
 import numpy as np
-from rembg import remove
+import piexif
+import requests
 from PIL import Image
+from rembg import remove
+import base64
 import io
-from dotenv import load_dotenv
-import stripe
 
-# 環境変数読み込み
-load_dotenv()
-
-# Flaskアプリ作成
-app = Flask(__name__)
 UPLOAD_FOLDER = "static"
+
+app = Flask(__name__)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-# staticフォルダがなければ作成
+# フォルダ作成
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-# Stripe設定
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-YOUR_DOMAIN = "https://photo-bg-remover.onrender.com"
-
-# プレビュー画像作成関数
-def preview_image(input_path, output_path, bgcolor=(255, 255, 255), threshold=0.5):
-    with open(input_path, 'rb') as i:
-        input_bytes = i.read()
-    output_bytes = remove(input_bytes)
-
-    image_pil = Image.open(io.BytesIO(output_bytes)).convert("RGBA")
-    image = np.array(image_pil)
-    h, w = image.shape[:2]
-
-    alpha = image[:, :, 3].astype(np.uint8)
-    kernel = np.ones((3, 3), np.uint8)
-    eroded_alpha = cv2.erode(alpha, kernel, iterations=1)
-    alpha_norm = eroded_alpha.astype(np.float32) / 255.0
-    alpha_norm[alpha_norm < threshold] = 0.0
-
-    foreground_rgb = image[:, :, :3].astype(np.float32)
-    background = np.full((h, w, 3), bgcolor, dtype=np.float32)
-
-    blended_rgb = foreground_rgb * alpha_norm[:, :, None] + background * (1 - alpha_norm[:, :, None])
-    blended_rgb = np.clip(blended_rgb, 0, 255).astype(np.uint8)
-    blended_bgr = cv2.cvtColor(blended_rgb, cv2.COLOR_RGB2BGR)
-
-    overlay = blended_bgr.copy()
-    text = "SAMPLE"
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = w / 400
-    thickness = 2
-    text_size = cv2.getTextSize(text, font, font_scale, thickness)[0]
-    text_x = (w - text_size[0]) // 2
-    text_y = (h + text_size[1]) // 2
-    cv2.putText(overlay, text, (text_x, text_y), font, font_scale, (0, 0, 255), thickness, cv2.LINE_AA)
-
-    result = cv2.addWeighted(overlay, 0.5, blended_bgr, 0.5, 0)
-    cv2.imwrite(output_path, result)
-
-# 完成画像作成関数
-def final_image(input_path, output_path, bgcolor=(255, 255, 255), size=(600, 800), fmt="png", y_offset=0, scale_factor=1.0):
-    with open(input_path, 'rb') as i:
-        input_bytes = i.read()
-    output_bytes = remove(input_bytes)
-
-    image_pil = Image.open(io.BytesIO(output_bytes)).convert("RGBA")
-    image = np.array(image_pil)
-    h, w = image.shape[:2]
-
-    new_w = int(w * scale_factor)
-    new_h = int(h * scale_factor)
-    image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-
-    canvas = np.zeros((h, w, 4), dtype=np.uint8)
-    canvas[:, :, :] = (255, 255, 255, 0)
-    start_y = (h - new_h) // 2 + int(y_offset)
-    start_x = (w - new_w) // 2
-    if 0 <= start_y < h and 0 <= start_x < w:
-        y1 = max(0, start_y)
-        y2 = min(h, start_y + new_h)
-        x1 = max(0, start_x)
-        x2 = min(w, start_x + new_w)
-        canvas[y1:y2, x1:x2] = image[0:(y2 - y1), 0:(x2 - x1)]
-    else:
-        canvas = cv2.resize(image, (w, h))
-
-    alpha = canvas[:, :, 3].astype(np.float32) / 255.0
-    foreground = canvas[:, :, :3].astype(np.float32)
-    background = np.full((h, w, 3), bgcolor, dtype=np.float32)
-
-    blended = foreground * alpha[..., None] + background * (1 - alpha[..., None])
-    blended = np.clip(blended, 0, 255).astype(np.uint8)
-    result_img = Image.fromarray(blended.astype(np.uint8)).convert("RGB")
-    result_img = result_img.resize(size)
-    result_img.save(output_path, format=fmt.upper())
-
-# ルーティング
-@app.route("/")
-def index():
+# ルート
+@app.route("/", methods=["GET"])
+def upload_file():
     return render_template("upload.html")
 
+# アップロード→プレビュー表示
 @app.route("/upload", methods=["POST"])
-def upload():
-    image = request.files["image"]
-    threshold = float(request.form.get("alpha_threshold", 0.5))
-    bgcolor_str = request.form.get("bgcolor", "255,255,255")
-    bgcolor = tuple(map(int, bgcolor_str.split(",")))
+def handle_upload():
+    file = request.files["image"]
+    filename = file.filename
+    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    file.save(filepath)
+
+    # フォーム入力
+    bgcolor = request.form.get("bgcolor", "255,255,255")
+    aspect_ratio = request.form.get("aspect_ratio", "3:4")
+    custom_rw = request.form.get("custom_rw_hidden", "3")
+    custom_rh = request.form.get("custom_rh_hidden", "4")
+    purpose = request.form.get("purpose", "job")
     width = int(request.form.get("width", 600))
     height = int(request.form.get("height", 800))
-    aspect_ratio = request.form.get("aspect_ratio", "3:4")
-    custom_rw = request.form.get("custom_rw", "3")
-    custom_rh = request.form.get("custom_rh", "4")
-    purpose = request.form.get("purpose", "job")
-    fmt = request.form.get("format", "png")
+    format = request.form.get("format", "jpeg")
+    scale_factor = float(request.form.get("scale_factor", 1))
+    y_offset = int(request.form.get("y_offset", 0))
 
-    filename = "uploaded_image.jpg"
-    input_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    image.save(input_path)
+    # 背景除去
+    input_image = Image.open(filepath)
+    no_bg_image = remove(input_image)
 
+    # 背景合成
+    r, g, b = map(int, bgcolor.split(","))
+    bg_color = (r, g, b)
+    output_array = np.array(no_bg_image)
+    if output_array.shape[-1] == 4:
+        alpha = output_array[:, :, 3] / 255.0
+        for c in range(3):
+            output_array[:, :, c] = output_array[:, :, c] * alpha + bg_color[c] * (1 - alpha)
+        output_array = output_array[:, :, :3]
+
+    # サイズ・比率調整
+    result_img = Image.fromarray(output_array.astype(np.uint8))
+
+    iw, ih = result_img.size
+    iw = int(iw * scale_factor)
+    ih = int(ih * scale_factor)
+    resized_img = result_img.resize((iw, ih))
+
+    canvas = Image.new("RGB", (width, height), (255, 255, 255))
+    x = (width - iw) // 2
+    y = (height - ih) // 2 + y_offset
+    canvas.paste(resized_img, (x, y))
+
+    # プレビュー用保存
     preview_path = os.path.join(app.config["UPLOAD_FOLDER"], "preview.jpg")
-    preview_image(input_path, preview_path, bgcolor, threshold)
+    canvas.save(preview_path, format.upper())
 
-    return render_template("preview.html", filename="preview.jpg", bgcolor=bgcolor_str, width=width, height=height, format=fmt, purpose=purpose, aspect_ratio=aspect_ratio, custom_rw=custom_rw, custom_rh=custom_rh)
+    # base64エンコードしてHTMLへ
+    with open(preview_path, "rb") as f:
+        preview_b64 = base64.b64encode(f.read()).decode("utf-8")
 
-@app.route("/create-checkout-session", methods=["POST"])
-def create_checkout_session():
-    bgcolor = request.form.get("bgcolor", "255,255,255")
-    width = request.form.get("width", "600")
-    height = request.form.get("height", "800")
-    fmt = request.form.get("format", "png")
-    y_offset = request.form.get("y_offset", "0")
-    scale = request.form.get("scale_factor", "1.0")
-    purpose = request.form.get("purpose", "job")
-    aspect_ratio = request.form.get("aspect_ratio", "3:4")
-    custom_rw = request.form.get("custom_rw", "3")
-    custom_rh = request.form.get("custom_rh", "4")
+    return render_template("preview.html", preview_image=preview_b64, filename=filename, bgcolor=bgcolor, 
+                           aspect_ratio=aspect_ratio, custom_rw=custom_rw, custom_rh=custom_rh, 
+                           purpose=purpose, width=width, height=height, format=format,
+                           scale_factor=scale_factor, y_offset=y_offset)
 
-    session = stripe.checkout.Session.create(
-        payment_method_types=["card"],
-        line_items=[{
-            "price_data": {
-                "currency": "jpy",
-                "product_data": {"name": "証明写真（背景透過・高品質）"},
-                "unit_amount": 300,
-            },
-            "quantity": 1,
-        }],
-        mode="payment",
-        success_url=YOUR_DOMAIN + f"/success?bgcolor={bgcolor}&width={width}&height={height}&format={fmt}&y_offset={y_offset}&scale={scale}&purpose={purpose}&aspect_ratio={aspect_ratio}&custom_rw={custom_rw}&custom_rh={custom_rh}",
-        cancel_url=YOUR_DOMAIN + "/cancel",
-    )
-    return redirect(session.url, code=303)
+# プレビュー後の処理（決済ページへ）
+@app.route("/confirm", methods=["POST"])
+def confirm():
+    return redirect(url_for("success"))
 
-@app.route("/success")
+# 決済成功後、本番用画像を生成
+@app.route("/success", methods=["GET", "POST"])
 def success():
-    input_path = os.path.join(app.config["UPLOAD_FOLDER"], "uploaded_image.jpg")
-    final_path = os.path.join(app.config["UPLOAD_FOLDER"], "final.png")
+    if request.method == "GET":
+        return render_template("success.html", result_image="result.jpg")
 
-    bgcolor_str = request.args.get("bgcolor", "255,255,255")
-    bgcolor = tuple(map(int, bgcolor_str.split(",")))
-    width = int(request.args.get("width", 600))
-    height = int(request.args.get("height", 800))
-    fmt = request.args.get("format", "png")
-    y_offset = int(request.args.get("y_offset", 0))
-    scale = float(request.args.get("scale", 1.0))
-    purpose = request.args.get("purpose", "job")
-    aspect_ratio = request.args.get("aspect_ratio", "3:4")
-    custom_rw = request.args.get("custom_rw", "3")
-    custom_rh = request.args.get("custom_rh", "4")
+    filename = request.form.get("filename")
+    bgcolor = request.form.get("bgcolor")
+    aspect_ratio = request.form.get("aspect_ratio")
+    custom_rw = request.form.get("custom_rw")
+    custom_rh = request.form.get("custom_rh")
+    purpose = request.form.get("purpose")
+    width = int(request.form.get("width"))
+    height = int(request.form.get("height"))
+    format = request.form.get("format")
+    scale_factor = float(request.form.get("scale_factor"))
+    y_offset = int(request.form.get("y_offset"))
 
-    final_image(input_path, final_path, bgcolor, (width, height), fmt, y_offset, scale)
+    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    input_image = Image.open(filepath)
 
-    return render_template("success.html", filename="final.png", purpose=purpose, aspect_ratio=aspect_ratio, custom_rw=custom_rw, custom_rh=custom_rh)
+    # remove.bg API呼び出し
+    api_key = os.getenv("REMOVEBG_API_KEY")
+    response = requests.post(
+        "https://api.remove.bg/v1.0/removebg",
+        files={"image_file": open(filepath, "rb")},
+        data={"size": "auto"},
+        headers={"X-Api-Key": api_key}
+    )
 
-@app.route("/download")
-def download():
-    return send_from_directory(app.config["UPLOAD_FOLDER"], "final.png", as_attachment=True)
+    if response.status_code == requests.codes.ok:
+        final_image = Image.open(io.BytesIO(response.content))
+    else:
+        return "Background removal failed: {}".format(response.text)
 
-@app.route("/cancel")
-def cancel():
-    return "<h1>決済がキャンセルされました。</h1>"
+    # 背景合成
+    r, g, b = map(int, bgcolor.split(","))
+    bg_color = (r, g, b)
+    final_array = np.array(final_image)
+    if final_array.shape[-1] == 4:
+        alpha = final_array[:, :, 3] / 255.0
+        for c in range(3):
+            final_array[:, :, c] = final_array[:, :, c] * alpha + bg_color[c] * (1 - alpha)
+        final_array = final_array[:, :, :3]
 
-@app.route("/static/<filename>")
-def send_file(filename):
-    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+    result_img = Image.fromarray(final_array.astype(np.uint8))
+
+    iw, ih = result_img.size
+    iw = int(iw * scale_factor)
+    ih = int(ih * scale_factor)
+    resized_img = result_img.resize((iw, ih))
+
+    canvas = Image.new("RGB", (width, height), (255, 255, 255))
+    x = (width - iw) // 2
+    y = (height - ih) // 2 + y_offset
+    canvas.paste(resized_img, (x, y))
+
+    result_path = os.path.join(app.config["UPLOAD_FOLDER"], "result.jpg")
+    canvas.save(result_path, format.upper())
+
+    return render_template("success.html", result_image="result.jpg")
+
+# ダウンロード
+@app.route("/download/<filename>")
+def download(filename):
+    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    return send_file(filepath, as_attachment=True)
 
 if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 5000))  # ← ← ← ここが超重要！！
+    port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)

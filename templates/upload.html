@@ -1,246 +1,70 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>証明写真アップロード</title>
-  <style>
-    #preview-container {
-      position: relative;
-      display: none;
-      margin-top: 20px;
-    }
-    #preview-canvas {
-      border: 1px solid #ccc;
-      cursor: grab;
-    }
-    #aspect-label-x, #aspect-label-y {
-      position: absolute;
-      color: black;
-      font-size: 14px;
-      font-weight: bold;
-      background: rgba(255,255,255,0.8);
-      padding: 2px 6px;
-      border-radius: 4px;
-      z-index: 5;
-    }
-    #aspect-label-x {
-      top: -30px;
-      left: 50%;
-      transform: translateX(-50%);
-    }
-    #aspect-label-y {
-      top: 50%;
-      right: -40px;
-      transform: translateY(-50%) rotate(-90deg);
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>画像アップロード</title>
 </head>
 <body>
-  <h1>証明写真アップロード</h1>
-  <form id="uploadForm" action="/upload" method="POST" enctype="multipart/form-data">
-    <label>画像を選択：</label><br>
-    <input type="file" id="imageInput" name="image" accept="image/*" required><br><br>
+    <h1>証明写真アップロード</h1>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <label>画像を選択：</label>
+        <input type="file" name="image" required><br><br>
 
-    <label>背景色の選択：</label><br>
-    <input type="radio" name="bg_option" id="bg_preset" checked onclick="toggleBgMode()"> 用途別
-    <select id="preset_color">
-      <option value="255,255,255">パスポート用（白）</option>
-      <option value="200,200,200">就活用（グレー）</option>
-      <option value="0,102,204">マイナンバー用（青）</option>
-    </select><br>
-    <input type="radio" name="bg_option" id="bg_custom" onclick="toggleBgMode()"> カラーピッカー
-    <input type="color" id="custom_color" value="#ffffff" disabled><br><br>
-    <input type="hidden" name="bgcolor" id="bgcolor" value="255,255,255">
+        <label>背景色を選択（RGB形式）:</label>
+        <input type="text" name="bgcolor" value="255,255,255"><br><br>
 
-    <label>用途（補助線）：</label>
-    <select name="purpose" id="purpose">
-      <option value="job">就活</option>
-      <option value="passport">パスポート</option>
-      <option value="mynumber">マイナンバー</option>
-    </select><br><br>
+        <label>アスペクト比選択:</label>
+        <select name="aspect_ratio">
+            <option value="3:4" selected>3:4（就活）</option>
+            <option value="2:3">2:3（パスポート）</option>
+            <option value="1:1">1:1（マイナンバー）</option>
+            <option value="custom">カスタム</option>
+        </select><br><br>
 
-    <label>アスペクト比：</label><br>
-    <input type="radio" name="ratio_mode" id="ratio_preset" checked onclick="toggleRatioMode()"> 用途別
-    <select id="aspect_ratio" name="aspect_ratio">
-      <option value="3:4">就活用 3:4</option>
-      <option value="35:45">パスポート用 35:45</option>
-      <option value="2:3">マイナンバー用 2:3</option>
-    </select><br>
-    <input type="radio" name="ratio_mode" id="ratio_custom" onclick="toggleRatioMode()"> 任意比率
-    横 <input type="number" id="custom_rw" value="3" step="0.1"> : 縦 <input type="number" id="custom_rh" value="4" step="0.1"><br><br>
+        <div id="custom_ratio" style="display:none;">
+            <label>カスタム横幅比:</label>
+            <input type="number" name="custom_rw_hidden" value="3" step="0.1"><br>
+            <label>カスタム高さ比:</label>
+            <input type="number" name="custom_rh_hidden" value="4" step="0.1"><br><br>
+        </div>
 
-    <label>出力サイズ（px）：</label><br>
-    横 <input type="number" id="width" name="width" value="600"> px × 
-    縦 <input type="number" id="height" name="height" value="800"> px<br><br>
+        <label>用途（補助線表示用）:</label>
+        <select name="purpose">
+            <option value="job" selected>就活</option>
+            <option value="passport">パスポート</option>
+            <option value="mynumber">マイナンバー</option>
+        </select><br><br>
 
-    <label>保存形式：</label>
-    <select name="format">
-      <option value="jpeg">JPEG</option>
-      <option value="png">PNG</option>
-    </select><br><br>
+        <label>出力画像幅（px）:</label>
+        <input type="number" name="width" value="600" required><br><br>
 
-    <label>拡大率：</label>
-    <input type="range" id="scale" min="0" max="2.0" step="0.01" value="1">
-    <span id="scaleVal">1</span>x<br><br>
+        <label>出力画像高さ（px）:</label>
+        <input type="number" name="height" value="800" required><br><br>
 
-    <input type="hidden" name="alpha_threshold" value="0.5">
-    <input type="hidden" name="y_offset" id="y_offset" value="0">
-    <input type="hidden" name="scale_factor" id="scale_factor" value="1">
-    <input type="hidden" name="custom_rw_hidden" id="custom_rw_hidden">
-    <input type="hidden" name="custom_rh_hidden" id="custom_rh_hidden">
+        <label>出力形式:</label>
+        <select name="format">
+            <option value="jpeg" selected>JPEG</option>
+            <option value="png">PNG</option>
+        </select><br><br>
 
-    <div id="preview-container">
-      <div id="aspect-label-x">横比</div>
-      <div id="aspect-label-y">縦比</div>
-      <canvas id="preview-canvas" width="600" height="800"></canvas>
-    </div>
-    <br>
-    <button type="submit">アップロードして処理</button>
-  </form>
+        <label>拡大縮小（倍率）:</label>
+        <input type="number" step="0.01" name="scale_factor" value="1.0"><br><br>
 
-  <script>
-    const canvas = document.getElementById("preview-canvas");
-    const ctx = canvas.getContext("2d");
-    const container = document.getElementById("preview-container");
-    const aspectLabelX = document.getElementById("aspect-label-x");
-    const aspectLabelY = document.getElementById("aspect-label-y");
-    const aspectPreset = document.getElementById("aspect_ratio");
-    const customRW = document.getElementById("custom_rw");
-    const customRH = document.getElementById("custom_rh");
-    const purpose = document.getElementById("purpose");
-    const imageInput = document.getElementById("imageInput");
-    const scaleInput = document.getElementById("scale");
-    const scaleDisplay = document.getElementById("scaleVal");
-    const scaleHidden = document.getElementById("scale_factor");
-    const yOffsetHidden = document.getElementById("y_offset");
-    const presetColor = document.getElementById("preset_color");
-    const customColor = document.getElementById("custom_color");
-    const bgcolor = document.getElementById("bgcolor");
-    const widthInput = document.getElementById("width");
-    const heightInput = document.getElementById("height");
+        <label>顔の縦位置調整（px）:</label>
+        <input type="number" name="y_offset" value="0"><br><br>
 
-    let rw = 3, rh = 4, scale = 1, offsetY = 0, dragging = false, startY = 0, img = new Image();
+        <input type="submit" value="プレビュー作成">
+    </form>
 
-    function toggleBgMode() {
-      if (document.getElementById("bg_preset").checked) {
-        presetColor.disabled = false;
-        customColor.disabled = true;
-        bgcolor.value = presetColor.value;
-      } else {
-        presetColor.disabled = true;
-        customColor.disabled = false;
-        const hex = customColor.value;
-        const r = parseInt(hex.substr(1, 2), 16);
-        const g = parseInt(hex.substr(3, 2), 16);
-        const b = parseInt(hex.substr(5, 2), 16);
-        bgcolor.value = `${r},${g},${b}`;
-      }
-    }
-
-    function toggleRatioMode() {
-      const useCustom = document.getElementById("ratio_custom").checked;
-      aspectPreset.disabled = useCustom;
-      customRW.disabled = !useCustom;
-      customRH.disabled = !useCustom;
-      updateSizeFromRatio();
-    }
-
-    function updateSizeFromRatio() {
-      if (document.getElementById("ratio_custom").checked) {
-        rw = parseFloat(customRW.value);
-        rh = parseFloat(customRH.value);
-      } else {
-        [rw, rh] = aspectPreset.value.split(":".trim()).map(Number);
-      }
-      const width = parseInt(widthInput.value);
-      const height = parseInt(heightInput.value);
-      if (document.activeElement === widthInput && !isNaN(width)) {
-        heightInput.value = Math.round(width * rh / rw);
-      } else if (document.activeElement === heightInput && !isNaN(height)) {
-        widthInput.value = Math.round(height * rw / rh);
-      }
-      drawImage();
-    }
-
-    function drawImage() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const iw = img.width * scale;
-      const ih = img.height * scale;
-      const ix = (canvas.width - iw) / 2;
-      const iy = (canvas.height - ih) / 2 + offsetY;
-      ctx.drawImage(img, ix, iy, iw, ih);
-
-      ctx.strokeStyle = "gray";
-      ctx.beginPath();
-      ctx.moveTo(canvas.width / 2, 0);
-      ctx.lineTo(canvas.width / 2, canvas.height);
-      ctx.stroke();
-
-      ctx.strokeStyle = "red";
-      ctx.lineWidth = 1;
-      let eye = 0.55, chin = 0.8, head = 0.2;
-      if (purpose.value === "passport") {
-        eye = 0.50; chin = 0.82; head = 0.18;
-      } else if (purpose.value === "mynumber") {
-        eye = 0.52; chin = 0.78; head = 0.22;
-      }
-      [head, eye, chin].forEach(r => {
-        const y = canvas.height * r;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(canvas.width, y);
-        ctx.stroke();
-      });
-      aspectLabelX.textContent = `横比 ${rw}`;
-      aspectLabelY.textContent = `縦比 ${rh}`;
-    }
-
-    imageInput.addEventListener("change", function() {
-      const file = this.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-      container.style.display = "block";
-    });
-
-    img.onload = function() { drawImage(); };
-
-    canvas.addEventListener("mousedown", e => { dragging = true; startY = e.clientY; canvas.style.cursor = "grabbing"; });
-    window.addEventListener("mouseup", () => { dragging = false; canvas.style.cursor = "grab"; });
-    window.addEventListener("mousemove", e => {
-      if (!dragging) return;
-      const dy = e.clientY - startY;
-      offsetY += dy;
-      yOffsetHidden.value = offsetY;
-      startY = e.clientY;
-      drawImage();
-    });
-
-    scaleInput.addEventListener("input", function() {
-      scale = parseFloat(this.value);
-      scaleDisplay.textContent = scale.toFixed(2);
-      scaleHidden.value = scale;
-      drawImage();
-    });
-
-    aspectPreset.addEventListener("change", updateSizeFromRatio);
-    customRW.addEventListener("input", updateSizeFromRatio);
-    customRH.addEventListener("input", updateSizeFromRatio);
-    widthInput.addEventListener("input", updateSizeFromRatio);
-    heightInput.addEventListener("input", updateSizeFromRatio);
-    purpose.addEventListener("change", drawImage);
-
-    document.getElementById("uploadForm").addEventListener("submit", () => {
-      document.getElementById("custom_rw_hidden").value = customRW.value;
-      document.getElementById("custom_rh_hidden").value = customRH.value;
-    });
-
-    toggleBgMode();
-    toggleRatioMode();
-    updateSizeFromRatio();
-  </script>
+    <script>
+        // アスペクト比選択でカスタムを選んだときだけ入力欄を出す
+        document.querySelector('select[name="aspect_ratio"]').addEventListener('change', function() {
+            if (this.value === "custom") {
+                document.getElementById("custom_ratio").style.display = "block";
+            } else {
+                document.getElementById("custom_ratio").style.display = "none";
+            }
+        });
+    </script>
 </body>
 </html>
