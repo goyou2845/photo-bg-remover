@@ -188,5 +188,6 @@ def send_file(filename):
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(debug=False, host="0.0.0.0", port=port)
+    import os
+    port = int(os.environ.get("PORT", 5000))  # Renderから渡されるPORT番号を使う
+    app.run(host="0.0.0.0", port=port, debug=False)
