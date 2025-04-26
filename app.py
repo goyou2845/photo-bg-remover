@@ -1,6 +1,5 @@
-# app.py
-from flask import Flask, render_template, request, send_from_directory, redirect, url_for
 import os
+from flask import Flask, render_template, request, send_from_directory, redirect, url_for
 import cv2
 import numpy as np
 from rembg import remove
@@ -9,27 +8,23 @@ import io
 from dotenv import load_dotenv
 import stripe
 
+# 環境変数読み込み
 load_dotenv()
 
-# staticフォルダがなければ作る
-if not os.path.exists("static"):
-    os.makedirs("static")
-
-
-aapp = Flask(__name__)
-
-# アップロードフォルダの設定
+# Flaskアプリ作成
+app = Flask(__name__)
 UPLOAD_FOLDER = "static"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-# static フォルダが存在しなければ作成
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# staticフォルダがなければ作成
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
-
-
+# Stripe設定
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 YOUR_DOMAIN = "https://photo-bg-remover.onrender.com"
 
+# プレビュー画像作成関数
 def preview_image(input_path, output_path, bgcolor=(255, 255, 255), threshold=0.5):
     with open(input_path, 'rb') as i:
         input_bytes = i.read()
@@ -65,6 +60,7 @@ def preview_image(input_path, output_path, bgcolor=(255, 255, 255), threshold=0.
     result = cv2.addWeighted(overlay, 0.5, blended_bgr, 0.5, 0)
     cv2.imwrite(output_path, result)
 
+# 完成画像作成関数
 def final_image(input_path, output_path, bgcolor=(255, 255, 255), size=(600, 800), fmt="png", y_offset=0, scale_factor=1.0):
     with open(input_path, 'rb') as i:
         input_bytes = i.read()
@@ -101,6 +97,7 @@ def final_image(input_path, output_path, bgcolor=(255, 255, 255), size=(600, 800
     result_img = result_img.resize(size)
     result_img.save(output_path, format=fmt.upper())
 
+# ルーティング
 @app.route("/")
 def index():
     return render_template("upload.html")
@@ -140,6 +137,7 @@ def create_checkout_session():
     aspect_ratio = request.form.get("aspect_ratio", "3:4")
     custom_rw = request.form.get("custom_rw", "3")
     custom_rh = request.form.get("custom_rh", "4")
+
     session = stripe.checkout.Session.create(
         payment_method_types=["card"],
         line_items=[{
@@ -168,7 +166,6 @@ def success():
     fmt = request.args.get("format", "png")
     y_offset = int(request.args.get("y_offset", 0))
     scale = float(request.args.get("scale", 1.0))
-
     purpose = request.args.get("purpose", "job")
     aspect_ratio = request.args.get("aspect_ratio", "3:4")
     custom_rw = request.args.get("custom_rw", "3")
@@ -176,12 +173,7 @@ def success():
 
     final_image(input_path, final_path, bgcolor, (width, height), fmt, y_offset, scale)
 
-    return render_template("success.html",
-                           filename="final.png",
-                           purpose=purpose,
-                           aspect_ratio=aspect_ratio,
-                           custom_rw=custom_rw,
-                           custom_rh=custom_rh)
+    return render_template("success.html", filename="final.png", purpose=purpose, aspect_ratio=aspect_ratio, custom_rw=custom_rw, custom_rh=custom_rh)
 
 @app.route("/download")
 def download():
@@ -196,8 +188,5 @@ def send_file(filename):
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host="0.0.0.0", port=port)
-
-
