@@ -189,5 +189,5 @@ def send_file(filename):
 
 if __name__ == "__main__":
     import os
-    port = int(os.environ.get("PORT", 5000))  # Renderから渡されるPORT番号を使う
-    app.run(host="0.0.0.0", port=port, debug=False)
+    port = int(os.environ.get("PORT", 5000))  # ← ← ← ここが超重要！！
+    app.run(host="0.0.0.0", port=port)
