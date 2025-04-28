@@ -92,8 +92,10 @@ def confirm():
 @app.route("/success", methods=["GET", "POST"])
 def success():
     if request.method == "GET":
-        return render_template("success.html", result_image="result.jpg")
+        # まだ画像ができてない段階
+        return render_template("success.html", download_ready=False)
 
+    # POSTなら、本番画像を作る処理
     filename = request.form.get("filename")
     bgcolor = request.form.get("bgcolor")
     aspect_ratio = request.form.get("aspect_ratio")
@@ -134,7 +136,6 @@ def success():
         final_array = final_array[:, :, :3]
 
     result_img = Image.fromarray(final_array.astype(np.uint8))
-
     iw, ih = result_img.size
     iw = int(iw * scale_factor)
     ih = int(ih * scale_factor)
@@ -148,7 +149,9 @@ def success():
     result_path = os.path.join(app.config["UPLOAD_FOLDER"], "result.jpg")
     canvas.save(result_path, format.upper())
 
-    return render_template("success.html", result_image="result.jpg")
+    # 成功したらダウンロードリンクありページに
+    return render_template("success.html", download_ready=True)
+
 
 # ダウンロード
 @app.route("/download/<filename>")
