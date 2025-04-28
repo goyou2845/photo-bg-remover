@@ -156,6 +156,16 @@ def download(filename):
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
     return send_file(filepath, as_attachment=True)
 
+import traceback
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # すべての例外をキャッチして、ログに出す
+    print("=== Exception Occurred ===")
+    print(traceback.format_exc())
+    return "Internal Server Error", 500
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))  # PORT 環境変数を読む
     app.run(host="0.0.0.0", port=port, debug=False)  # 0.0.0.0でバインド
