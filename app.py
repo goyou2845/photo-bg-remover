@@ -153,8 +153,18 @@ def success():
 # ダウンロード
 @app.route("/download/<filename>")
 def download(filename):
+    # ファイルパスではなく、直接 result_img を返すようにする
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    return send_file(filepath, as_attachment=True)
+
+    if not os.path.exists(filepath):
+        return "File not found", 404
+
+    with open(filepath, "rb") as f:
+        file_bytes = io.BytesIO(f.read())
+    
+    file_bytes.seek(0)
+    return send_file(file_bytes, as_attachment=True, download_name=filename, mimetype="image/jpeg")
+
 
 import traceback
 
