@@ -92,10 +92,10 @@ def confirm():
 @app.route("/success", methods=["GET", "POST"])
 def success():
     if request.method == "GET":
-        # まだ画像ができてない段階
+        # GETでアクセスされた場合は、ダウンロードリンクはまだ非表示
         return render_template("success.html", download_ready=False)
 
-    # POSTなら、本番画像を作る処理
+    # POST（決済完了後）の場合はここから
     filename = request.form.get("filename")
     bgcolor = request.form.get("bgcolor")
     aspect_ratio = request.form.get("aspect_ratio")
@@ -111,7 +111,7 @@ def success():
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
     input_image = Image.open(filepath)
 
-    # remove.bg API呼び出し
+    # remove.bg APIを使って背景除去
     api_key = os.getenv("REMOVEBG_API_KEY")
     response = requests.post(
         "https://api.remove.bg/v1.0/removebg",
@@ -125,7 +125,7 @@ def success():
     else:
         return "Background removal failed: {}".format(response.text)
 
-    # 背景合成
+    # 背景色を合成
     r, g, b = map(int, bgcolor.split(","))
     bg_color = (r, g, b)
     final_array = np.array(final_image)
@@ -136,21 +136,26 @@ def success():
         final_array = final_array[:, :, :3]
 
     result_img = Image.fromarray(final_array.astype(np.uint8))
+
+    # サイズ調整
     iw, ih = result_img.size
     iw = int(iw * scale_factor)
     ih = int(ih * scale_factor)
     resized_img = result_img.resize((iw, ih))
 
+    # キャンバス作成
     canvas = Image.new("RGB", (width, height), (255, 255, 255))
     x = (width - iw) // 2
     y = (height - ih) // 2 + y_offset
     canvas.paste(resized_img, (x, y))
 
+    # result.jpg保存
     result_path = os.path.join(app.config["UPLOAD_FOLDER"], "result.jpg")
     canvas.save(result_path, format.upper())
 
-    # 成功したらダウンロードリンクありページに
+    # 生成が完了したのでダウンロードリンクを表示
     return render_template("success.html", download_ready=True)
+
 
 
 # ダウンロード

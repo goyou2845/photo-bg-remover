@@ -8,10 +8,13 @@
     <h1>本番画像生成完了！</h1>
 
     {% if download_ready %}
-        <a href="/download/result.jpg" download>ダウンロードする</a>
-    {% else %}
-        <p>決済完了しました。画像生成中です...</p>
-    {% endif %}
+  <h2>画像が完成しました！</h2>
+  <a href="/download/result.jpg" download>ダウンロードする</a>
+{% else %}
+  <h2>決済完了！</h2>
+  <p>現在、画像を生成中です。しばらくお待ちください...</p>
+{% endif %}
+
 </body>
 </html>
 
