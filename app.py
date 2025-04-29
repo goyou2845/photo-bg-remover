@@ -84,9 +84,30 @@ def handle_upload():
                            scale_factor=scale_factor, y_offset=y_offset)
 
 # プレビュー後の処理（決済ページへ）
+import stripe
+
+# 環境変数から読み込み
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
+
 @app.route("/confirm", methods=["POST"])
 def confirm():
-    return redirect(url_for("success"))
+    session = stripe.checkout.Session.create(
+        payment_method_types=["card"],
+        line_items=[{
+            "price_data": {
+                "currency": "jpy",
+                "unit_amount": 30000,  # 300円＝30000銭
+                "product_data": {
+                    "name": "証明写真ダウンロード"
+                },
+            },
+            "quantity": 1,
+        }],
+        mode="payment",
+        success_url=url_for("success", _external=True),  # 決済成功後のURL
+        cancel_url=url_for("upload_file", _external=True)  # 決済キャンセル後のURL
+    )
+    return redirect(session.url, code=303)
 
 # 決済成功後、本番用画像を生成
 @app.route("/success", methods=["GET", "POST"])
