@@ -92,16 +92,10 @@ def confirm():
 @app.route("/success", methods=["GET", "POST"])
 def success():
     if request.method == "GET":
-        # GETでアクセスされた場合は、ダウンロードリンクはまだ非表示
-        return render_template("success.html", download_ready=False)
+        return render_template("success.html", result_image=None)
 
-    # POST（決済完了後）の場合はここから
     filename = request.form.get("filename")
     bgcolor = request.form.get("bgcolor")
-    aspect_ratio = request.form.get("aspect_ratio")
-    custom_rw = request.form.get("custom_rw")
-    custom_rh = request.form.get("custom_rh")
-    purpose = request.form.get("purpose")
     width = int(request.form.get("width"))
     height = int(request.form.get("height"))
     format = request.form.get("format")
@@ -109,25 +103,25 @@ def success():
     y_offset = int(request.form.get("y_offset"))
 
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    input_image = Image.open(filepath)
 
-    # remove.bg APIを使って背景除去
+    # remove.bg API呼び出し
     api_key = os.getenv("REMOVEBG_API_KEY")
-    response = requests.post(
-        "https://api.remove.bg/v1.0/removebg",
-        files={"image_file": open(filepath, "rb")},
-        data={"size": "auto"},
-        headers={"X-Api-Key": api_key}
-    )
+    with open(filepath, "rb") as f:
+        response = requests.post(
+            "https://api.remove.bg/v1.0/removebg",
+            files={"image_file": f},
+            data={"size": "auto"},
+            headers={"X-Api-Key": api_key}
+        )
 
-    if response.status_code == requests.codes.ok:
-        final_image = Image.open(io.BytesIO(response.content))
-    else:
-        return "Background removal failed: {}".format(response.text)
+    if response.status_code != requests.codes.ok:
+        return f"Background removal failed: {response.text}"
 
-    # 背景色を合成
+    # 本番画像作成
+    final_image = Image.open(io.BytesIO(response.content))
     r, g, b = map(int, bgcolor.split(","))
     bg_color = (r, g, b)
+
     final_array = np.array(final_image)
     if final_array.shape[-1] == 4:
         alpha = final_array[:, :, 3] / 255.0
@@ -136,25 +130,21 @@ def success():
         final_array = final_array[:, :, :3]
 
     result_img = Image.fromarray(final_array.astype(np.uint8))
-
-    # サイズ調整
     iw, ih = result_img.size
     iw = int(iw * scale_factor)
     ih = int(ih * scale_factor)
     resized_img = result_img.resize((iw, ih))
 
-    # キャンバス作成
     canvas = Image.new("RGB", (width, height), (255, 255, 255))
     x = (width - iw) // 2
     y = (height - ih) // 2 + y_offset
     canvas.paste(resized_img, (x, y))
 
-    # result.jpg保存
     result_path = os.path.join(app.config["UPLOAD_FOLDER"], "result.jpg")
     canvas.save(result_path, format.upper())
 
-    # 生成が完了したのでダウンロードリンクを表示
-    return render_template("success.html", download_ready=True)
+    return render_template("success.html", result_image="result.jpg")
+
 
 
 
